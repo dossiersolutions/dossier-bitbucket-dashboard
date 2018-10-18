@@ -1,0 +1,51 @@
+.branch {
+	display: inline-block;
+	padding: 0.5em;
+	border: 1px solid #dddddd;
+	border-radius: 0.5em;
+	margin: 1em;
+}
+
+.branch-header {
+	background: #eeeeee;
+	border-radius: 0.25em;
+	padding: 0.5em;
+}
+
+.branch-pipeline {
+	float: right;
+	padding-left: 1em;
+}
+
+.branch-content {
+	display: table;
+	width: 100%;
+}
+
+.step {
+	display: table-row;
+	padding: 0.25em;
+}
+
+.step-name,
+.step-state,
+.step-pipeline {
+	display: table-cell;
+	padding: 0.25em 0.5em;
+}
+
+.step-state {
+	text-align: center;
+}
+
+.step-pipeline {
+	text-align: right;
+}
+
+.status-successful {
+	background: #00ff00;
+}
+
+.status-failed {
+	background: #ff0000;
+}
