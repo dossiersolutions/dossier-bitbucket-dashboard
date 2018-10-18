@@ -4,8 +4,8 @@ const stepStatePriorities = {
 	SUCCESSFUL: 2
 };
 
-const stateUpdateInterval = 15000;
-const pipelineCount = 100;
+const stateUpdateInterval = 30000;
+const pipelineCount = 200;
 
 function sendAPIRequest(method, path, body = null) {
 	const promise = new Promise((resolve, reject) => {
@@ -32,8 +32,8 @@ function sendAPIRequest(method, path, body = null) {
 	return promise;
 }
 
-function getPipelineLink(pipelineIndex) {
-	return "https://bitbucket.org/dossiersolutions/dossier-profile/addon/pipelines/home#!/results/" + pipelineIndex;
+function getPipelineLink(pipelineNumber) {
+	return "https://bitbucket.org/dossiersolutions/dossier-profile/addon/pipelines/home#!/results/" + pipelineNumber;
 }
 
 function updateState() {
@@ -46,23 +46,36 @@ function updateState() {
 			.then((result) => {
 				let processedPipelines = 0;
 				
-				for (let pipelineIndex = result.size; pipelineIndex > result.size - pipelineCount; pipelineIndex--) {
-					sendAPIRequest("GET", "repositories/dossiersolutions/dossier-profile/pipelines/" + pipelineIndex)
+				for (let index = result.size; index > result.size - pipelineCount; index--) {
+					sendAPIRequest("GET", "repositories/dossiersolutions/dossier-profile/pipelines/" + index)
 						.then((result) => {
-							if (!state.branches[result.target.ref_name]) {
-								state.branches[result.target.ref_name] = {
-									name: result.target.ref_name,
+							const pipelineNumber = result.build_number;
+							const branchName = result.target.ref_name;
+							
+							if (!branchName) {
+								processedPipelines++;
+								
+								if (processedPipelines === pipelineCount) {
+									resolve();
+								}
+								
+								return;
+							}
+							
+							if (!state.branches[branchName]) {
+								state.branches[branchName] = {
+									name: branchName,
 									aggregatedSteps: {}
 								};
 							}
 							
-							const branch = state.branches[result.target.ref_name];
+							const branch = state.branches[branchName];
 							
-							if (!branch.lastPipeline || branch.lastPipeline < result.build_number) {
-								branch.lastPipeline = result.build_number;
+							if (!branch.lastPipeline || branch.lastPipeline < pipelineNumber) {
+								branch.lastPipeline = pipelineNumber;
 							}
 							
-							sendAPIRequest("GET", "repositories/dossiersolutions/dossier-profile/pipelines/" + pipelineIndex + "/steps/")
+							sendAPIRequest("GET", "repositories/dossiersolutions/dossier-profile/pipelines/" + pipelineNumber + "/steps/")
 								.then((result) => {
 									for (let stepIndex in result.values) {
 										const step = result.values[stepIndex];
@@ -79,7 +92,10 @@ function updateState() {
 											if (!aggregatedStep.state || stepStatePriorities[stepState] > stepStatePriorities[aggregatedStep.state]) {
 												aggregatedStep.name = step.name;
 												aggregatedStep.state = stepState;
-												aggregatedStep.pipeline = pipelineIndex;
+												
+												if (!aggregatedStep.pipeline || aggregatedStep.pipeline < pipelineNumber) {
+													aggregatedStep.pipeline = pipelineNumber;
+												}
 											}
 										}
 									}
@@ -107,7 +123,7 @@ function renderState(state) {
 		return;
 	}
 	
-	const sortedBranches = Object.values(state.branches).sort((a, b) => a.lastPipeline < b.lastPipeline);
+	const sortedBranches = Object.values(state.branches).sort((a, b) => b.lastPipeline - a.lastPipeline);
 	const branchElements = [];
 	
 	for (let branchIndex in sortedBranches) {
