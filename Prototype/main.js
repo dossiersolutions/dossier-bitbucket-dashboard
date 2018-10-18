@@ -1,9 +1,3 @@
-const stepStatePriorities = {
-	ERROR: 0,
-	FAILED: 1,
-	SUCCESSFUL: 2
-};
-
 const stateUpdateInterval = 30000;
 const pipelineCount = 200;
 
@@ -31,6 +25,15 @@ function sendAPIRequest(method, path, body = null) {
 	
 	return promise;
 }
+
+function getStepStatePriority(state) {
+	switch (state) {
+		case "ERROR": return 0;
+		case "FAILED": return 1;
+		case "SUCCESSFUL": return 2;
+		default: return -1;
+	}
+};
 
 function getPipelineLink(pipelineNumber) {
 	return "https://bitbucket.org/dossiersolutions/dossier-profile/addon/pipelines/home#!/results/" + pipelineNumber;
@@ -87,9 +90,8 @@ function updateState() {
 											
 											const aggregatedStep = branch.aggregatedSteps[step.name];
 											const stepState = step.state.result ? step.state.result.name : step.state.name;
-											const priority = stepStatePriorities[stepState] || -1;
 											
-											if (!aggregatedStep.state || stepStatePriorities[stepState] > stepStatePriorities[aggregatedStep.state]) {
+											if (!aggregatedStep.state || getStepStatePriority(stepState) >= getStepStatePriority(aggregatedStep.state)) {
 												aggregatedStep.name = step.name;
 												aggregatedStep.state = stepState;
 												
@@ -178,10 +180,10 @@ function updateAndRenderState() {
 			const state = JSON.parse(window.sessionStorage.getItem("aggregatedPipelineState"));
 			renderState(state);
 		})
-		.catch ((request) => {
-			document.body.querySelector(".container").innerHTML = "Error: Was unable to update the state (reason: " + request.responseText + ")";
+		.catch ((error) => {
+			document.body.querySelector(".container").innerHTML = "Error: Was unable to update the state (reason: " + (error.responseText || error) + ")";
 			
-			if (request.status === 400 || request.status === 403) {
+			if (error.status === 400 || error.status === 403) {
 				window.sessionStorage.setItem("authToken", "");
 			}
 		});
