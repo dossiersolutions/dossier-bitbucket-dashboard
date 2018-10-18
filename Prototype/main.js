@@ -1,8 +1,7 @@
 const stepStatePriorities = {
-	IN_PROGRESS: 0,
-	SUCCESSFUL: 0,
+	ERROR: 0,
 	FAILED: 1,
-	ERROR: 1
+	SUCCESSFUL: 2
 };
 
 const stateUpdateInterval = 15000;
@@ -31,6 +30,10 @@ function sendAPIRequest(method, path, body = null) {
 	});
 	
 	return promise;
+}
+
+function getPipelineLink(pipelineIndex) {
+	return "https://bitbucket.org/dossiersolutions/dossier-profile/addon/pipelines/home#!/results/" + pipelineIndex;
 }
 
 function updateState() {
@@ -104,37 +107,43 @@ function renderState(state) {
 		return;
 	}
 	
+	const sortedBranches = Object.values(state.branches).sort((a, b) => a.lastPipeline < b.lastPipeline);
 	const branchElements = [];
-	const mappedBranches = {};
-	
-	for (let branchIndex in state.branches) {
-		const branch = state.branches[branchIndex];
-		mappedBranches[branch.lastPipeline] = branch;
-	}
-	
-	const sortedBranches = Object.values(mappedBranches).reverse();
 	
 	for (let branchIndex in sortedBranches) {
 		const branch = sortedBranches[branchIndex];
+		const sortedSteps = Object.values(branch.aggregatedSteps).sort((a, b) => a.name.localeCompare(b.name));
 		const stepElements = [];
 		
-		for (let stepIndex in branch.aggregatedSteps) {
-			const aggregatedStep = branch.aggregatedSteps[stepIndex];
+		for (let stepIndex in sortedSteps) {
+			const step = sortedSteps[stepIndex];
+			
+			const stepPipelineAttributes = {
+				"class": "step-pipeline",
+				"href": getPipelineLink(step.pipeline),
+				"target": "_blank"
+			};
 			
 			stepElements.push(
 				crel("div", {"class": "step"},
-					crel("span", {"class": "step-name"}, aggregatedStep.name),
-					crel("span", {"class": "step-state status-" + aggregatedStep.state.toLowerCase()}, aggregatedStep.state),
-					crel("span", {"class": "step-pipeline"}, "#" + aggregatedStep.pipeline)
+					crel("span", {"class": "step-name"}, step.name),
+					crel("span", {"class": "step-state status-" + step.state.toLowerCase()}, step.state),
+					crel("a", stepPipelineAttributes, "#" + step.pipeline)
 				)
 			);
 		}
+		
+		const branchPipelineAttributes = {
+			"class": "branch-pipeline",
+			"href": getPipelineLink(branch.lastPipeline),
+			"target": "_blank"
+		};
 		
 		branchElements.push(
 			crel("div", {"class": "branch"},
 				crel("div", {"class": "branch-header"},
 					crel("span", {"class": "branch-name"}, branch.name),
-					crel("span", {"class": "branch-pipeline"}, "#" + branch.lastPipeline)
+					crel("a", branchPipelineAttributes, "#" + branch.lastPipeline)
 				),
 				crel("div", {"class": "branch-content"}, stepElements)
 			)
