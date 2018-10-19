@@ -123,7 +123,7 @@ function updateState() {
 					const aggregatedStep = branch.aggregatedSteps[step.name];
 					const stepState = step.state.result ? step.state.result.name : step.state.name;
 					
-					if (!aggregatedStep.state || getStepStatePriority(stepState) >= getStepStatePriority(aggregatedStep.state)) {
+					if (!aggregatedStep.state || getStepStatePriority(stepState) > getStepStatePriority(aggregatedStep.state)) {
 						aggregatedStep.name = step.name;
 						aggregatedStep.state = stepState;
 						aggregatedStep.pipeline = pipelineNumber;
