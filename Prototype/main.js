@@ -29,8 +29,8 @@ function sendAPIRequest(method, path, body = null) {
 function getStepStatePriority(state) {
 	switch (state) {
 		case "ERROR": return 0;
-		case "FAILED": return 1;
-		case "SUCCESSFUL": return 2;
+		case "FAILED": return 0;
+		case "SUCCESSFUL": return 0;
 		default: return -1;
 	}
 };
@@ -39,12 +39,12 @@ function getPipelineLink(pipelineNumber) {
 	return "https://bitbucket.org/dossiersolutions/dossier-profile/addon/pipelines/home#!/results/" + pipelineNumber;
 }
 
-function updateState() {
-	const state = {
-		branches: {}
-	};
-	
+function loadData() {
 	return new Promise((resolve, reject) => {
+		const data = {
+			pipelines: {}
+		};
+		
 		sendAPIRequest("GET", "repositories/dossiersolutions/dossier-profile/pipelines/")
 			.then((result) => {
 				let processedPipelines = 0;
@@ -53,59 +53,31 @@ function updateState() {
 					sendAPIRequest("GET", "repositories/dossiersolutions/dossier-profile/pipelines/" + index)
 						.then((result) => {
 							const pipelineNumber = result.build_number;
-							const branchName = result.target.ref_name;
 							
-							if (!branchName) {
+							if (!result.target.ref_name) {
 								processedPipelines++;
 								
 								if (processedPipelines === pipelineCount) {
-									resolve();
+									resolve(data);
 								}
 								
 								return;
 							}
 							
-							if (!state.branches[branchName]) {
-								state.branches[branchName] = {
-									name: branchName,
-									aggregatedSteps: {}
-								};
-							}
+							data.pipelines[pipelineNumber] = {
+								number: pipelineNumber,
+								branchName: result.target.ref_name
+							};
 							
-							const branch = state.branches[branchName];
-							
-							if (!branch.lastPipeline || branch.lastPipeline < pipelineNumber) {
-								branch.lastPipeline = pipelineNumber;
-							}
+							const pipeline = data.pipelines[pipelineNumber];
 							
 							sendAPIRequest("GET", "repositories/dossiersolutions/dossier-profile/pipelines/" + pipelineNumber + "/steps/")
 								.then((result) => {
-									for (let stepIndex in result.values) {
-										const step = result.values[stepIndex];
-										
-										if (step.duration_in_seconds > 120) {
-											if (!branch.aggregatedSteps[step.name]) {
-												branch.aggregatedSteps[step.name] = {};
-											}
-											
-											const aggregatedStep = branch.aggregatedSteps[step.name];
-											const stepState = step.state.result ? step.state.result.name : step.state.name;
-											
-											if (!aggregatedStep.state || getStepStatePriority(stepState) >= getStepStatePriority(aggregatedStep.state)) {
-												aggregatedStep.name = step.name;
-												aggregatedStep.state = stepState;
-												
-												if (!aggregatedStep.pipeline || aggregatedStep.pipeline < pipelineNumber) {
-													aggregatedStep.pipeline = pipelineNumber;
-												}
-											}
-										}
-									}
-									
+									pipeline.steps = result.values;
 									processedPipelines++;
 									
 									if (processedPipelines === pipelineCount) {
-										resolve();
+										resolve(data);
 									}
 								})
 								.catch((request) => reject(request));
@@ -114,8 +86,52 @@ function updateState() {
 				}
 			})
 			.catch((request) => reject(request));
-	})
-	.then(() => {
+	});
+}
+
+function updateState() {
+	return loadData().then((data) => {
+		const state = {
+			branches: {}
+		};
+		
+		const pipelines = Object.values(data.pipelines).reverse();
+		
+		for (let pipelineIndex in pipelines) {
+			const pipeline = pipelines[pipelineIndex];
+			const pipelineNumber = pipeline.number;
+			const branchName = pipeline.branchName;
+			
+			if (!state.branches[branchName]) {
+				state.branches[branchName] = {
+					name: branchName,
+					lastPipeline: pipelineNumber,
+					aggregatedSteps: {}
+				};
+			}
+			
+			const branch = state.branches[branchName];
+			
+			for (let stepIndex in pipeline.steps) {
+				const step = pipeline.steps[stepIndex];
+				
+				if (step.duration_in_seconds > 120) {
+					if (!branch.aggregatedSteps[step.name]) {
+						branch.aggregatedSteps[step.name] = {};
+					}
+					
+					const aggregatedStep = branch.aggregatedSteps[step.name];
+					const stepState = step.state.result ? step.state.result.name : step.state.name;
+					
+					if (!aggregatedStep.state || getStepStatePriority(stepState) >= getStepStatePriority(aggregatedStep.state)) {
+						aggregatedStep.name = step.name;
+						aggregatedStep.state = stepState;
+						aggregatedStep.pipeline = pipelineNumber;
+					}
+				}
+			}
+		}
+		
 		window.sessionStorage.setItem("aggregatedPipelineState", JSON.stringify(state));
 	});
 }
